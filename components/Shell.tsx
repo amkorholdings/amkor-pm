@@ -1,19 +1,29 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+const NAV = [
+  { href: '/properties', label: 'Properties' },
+  { href: '/leases/new', label: 'New lease' },
+  { href: '/import', label: 'Import' },
+];
+
 export function Shell({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div>
-      <nav style={{ display: 'flex', gap: '1rem', padding: '1rem 2rem', borderBottom: '1px solid #ddd' }}>
-        <strong>Amkor PM</strong>
-        <Link href="/properties">Properties</Link>
-        <Link href="/leases/new">New lease</Link>
-        <Link href="/import">Import</Link>
-        <form action="/auth/signout" method="post" style={{ marginLeft: 'auto' }}>
-          <button type="submit">Sign out</button>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">Amkor PM</div>
+        {NAV.map((n) => (
+          <Link key={n.href} href={n.href} className="nav-link">
+            {n.label}
+          </Link>
+        ))}
+        <form action="/auth/signout" method="post">
+          <button type="submit" style={{ background: 'transparent', color: 'var(--sidebar-text)', padding: '9px 12px', textAlign: 'left', width: '100%' }}>
+            Sign out
+          </button>
         </form>
-      </nav>
-      <main style={{ padding: '2rem' }}>
+      </aside>
+      <main className="content">
         <h1>{title}</h1>
         {children}
       </main>

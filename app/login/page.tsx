@@ -19,18 +19,18 @@ export default async function LoginPage({
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 420 }}>
+    <main className="login">
       <h1>Sign in</h1>
       {searchParams.error === 'not-staff' && (
-        <p style={{ color: 'crimson' }}>This account is not set up for staff access.</p>
+        <p className="error">This account is not set up for staff access.</p>
       )}
       {searchParams.sent ? (
         <p>Check your email for the sign-in link.</p>
       ) : (
-        <form action={sendLink}>
+        <form action={sendLink} style={{ display: 'grid', gap: 12 }}>
           <label>
             Email
-            <input name="email" type="email" required style={{ display: 'block', width: '100%', margin: '0.5rem 0' }} />
+            <input name="email" type="email" required style={{ marginTop: 6 }} />
           </label>
           <button type="submit">Send sign-in link</button>
         </form>
