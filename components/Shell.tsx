@@ -5,6 +5,7 @@ const NAV = [
   { href: '/properties', label: 'Properties' },
   { href: '/leases/new', label: 'New lease' },
   { href: '/deposits', label: 'Payments' },
+  { href: '/bank', label: 'Bank feed' },
   { href: '/import', label: 'Import' },
 ];
 

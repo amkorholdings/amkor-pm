@@ -5,7 +5,7 @@ import { requireStaff } from '@/lib/auth';
 import { DEPOSIT_METHODS, METHOD_LABELS, recordDeposit, type DepositMethod } from '@/lib/payments';
 import { Shell } from '@/components/Shell';
 
-// Record cash, money order, and cashier's check deposits by the tenant's deposit number,
+// Record cash, money order, and cashier's check deposits by the unit's deposit number,
 // and see recent payments from every channel.
 export default async function DepositsPage({ searchParams }: { searchParams: { error?: string } }) {
   const { supabase } = await requireStaff();
@@ -42,11 +42,12 @@ export default async function DepositsPage({ searchParams }: { searchParams: { e
       <h2>Record an in-person deposit</h2>
       <p className="muted">
         For cash, money orders, and cashier's checks deposited at Truliant or a CO-OP Shared Branch credit union.
-        The deposit number is the tenant's account number. The payment posts to their active lease.
+        The deposit number is the unit's bank account number. The payment posts to the unit's active lease. Deposits
+        the 5am bank feed picks up are posted automatically and don't need to be entered here.
       </p>
       {searchParams.error && <p className="error">{searchParams.error}</p>}
       <form action={addDeposit} style={{ display: 'grid', gap: '0.75rem', maxWidth: 420 }}>
-        <input name="account_number" placeholder="Deposit number (account number)" required />
+        <input name="account_number" placeholder="Unit deposit number (account number)" required />
         <input name="amount" placeholder="Amount" inputMode="decimal" required />
         <select name="method" defaultValue="money_order">
           {DEPOSIT_METHODS.map((m) => (

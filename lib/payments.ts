@@ -10,6 +10,7 @@ export const METHOD_LABELS: Record<string, string> = {
   cash: 'Cash',
   money_order: 'Money order',
   cashiers_check: "Cashier's check",
+  branch_deposit: 'Bank deposit',
 };
 
 // Where tenants can make in-person deposits.
@@ -23,10 +24,11 @@ export type NewDeposit = {
   received_date: string; // YYYY-MM-DD
   reference?: string | null; // bank transaction id, money order number, or check number
   location?: string | null;
-  lease_id?: string | null; // only when the tenant has more than one active lease
+  lease_id?: string | null; // only when the unit has more than one active lease
 };
 
-// Records an in-person deposit and posts it to the tenant's ledger in one transaction.
+// Records an in-person deposit by the unit's deposit number and posts it to the unit's active lease
+// in one transaction.
 export async function recordDeposit(supabase: SupabaseClient, d: NewDeposit) {
   if (!(DEPOSIT_METHODS as readonly string[]).includes(d.method)) {
     throw new Error(`method must be one of ${DEPOSIT_METHODS.join(', ')}`);

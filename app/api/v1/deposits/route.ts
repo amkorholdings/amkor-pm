@@ -6,7 +6,7 @@ import { recordDeposit, type DepositMethod } from '@/lib/payments';
 // POST /api/v1/deposits
 // Body: { account_number, amount, method: "cash" | "money_order" | "cashiers_check",
 //         received_date: "YYYY-MM-DD", reference?, location?, lease_id? }
-// Records an in-person deposit by the tenant's deposit number and posts it to their ledger.
+// Records an in-person deposit by the unit's deposit number and posts it to the unit's active lease.
 // The same (account_number, reference) can only be recorded once, so a bank feed can resend safely.
 export async function POST(request: NextRequest) {
   const denied = checkAgentToken(request);

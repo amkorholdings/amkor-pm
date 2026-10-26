@@ -1,14 +1,15 @@
 -- Payments: Stripe (card and ACH) and in-person deposits (cash, money order, cashier's check).
--- In-person deposits go into a bank account tied to the tenant's profile. That account number is the
--- tenant's deposit number. Deposits can be made at any Truliant branch or any CO-OP Shared Branch credit union.
+-- Every rentable unit has its own bank account. That account number is the unit's deposit number, which
+-- the unit's current tenant uses. It stays with the unit when tenants change.
+-- Deposits can be made at any Truliant branch or any CO-OP Shared Branch credit union.
 -- Every successful payment posts one 'payment' row to the ledger; a returned payment posts an adjustment.
 
 alter table people add column stripe_customer_id text unique;
 
--- One deposit account per tenant.
+-- One deposit account per unit.
 create table deposit_accounts (
   id uuid primary key default gen_random_uuid(),
-  person_id uuid not null unique references people(id),
+  unit_id uuid not null unique references units(id),
   institution text not null default 'Truliant Federal Credit Union',
   account_number text not null unique,
   active boolean not null default true,
@@ -19,7 +20,8 @@ create table payments (
   id uuid primary key default gen_random_uuid(),
   lease_id uuid not null references leases(id),
   person_id uuid references people(id),
-  method text not null check (method in ('card','ach','cash','money_order','cashiers_check')),
+  -- branch_deposit: a deposit seen in the bank feed, where the bank doesn't say if it was cash or a check.
+  method text not null check (method in ('card','ach','cash','money_order','cashiers_check','branch_deposit')),
   amount numeric(10,2) not null check (amount > 0),
   status text not null default 'pending' check (status in ('pending','succeeded','failed','returned')),
   stripe_checkout_session_id text unique,
@@ -43,8 +45,12 @@ create policy "staff all" on deposit_accounts for all using (is_staff()) with ch
 create policy "staff all" on payments for all using (is_staff()) with check (is_staff());
 
 -- Tenants see their own deposit number and payments. Writes go through the server (service role).
-create policy "tenant reads own deposit account" on deposit_accounts
-  for select using (person_id = current_person_id());
+create policy "tenant reads own unit's deposit account" on deposit_accounts
+  for select using (unit_id in (
+    select l.unit_id from leases l
+    join lease_people lp on lp.lease_id = l.id
+    where lp.person_id = current_person_id() and l.status = 'active'
+  ));
 
 create policy "tenant reads own payments" on payments
   for select using (lease_id in (select lease_id from lease_people where person_id = current_person_id()));
@@ -96,8 +102,8 @@ begin
   return entry_id;
 end $$;
 
--- Records an in-person deposit by the tenant's deposit number and posts it to their active lease.
--- Pass p_lease_id only when the tenant has more than one active lease.
+-- Records an in-person deposit by the unit's deposit number and posts it to the unit's active lease.
+-- Pass p_lease_id only when the unit has more than one active lease.
 create or replace function record_deposit(
   p_account_number text,
   p_amount numeric,
@@ -113,8 +119,8 @@ declare
   lease_count int;
   payment_id uuid;
 begin
-  if p_method not in ('cash','money_order','cashiers_check') then
-    raise exception 'method must be cash, money_order, or cashiers_check';
+  if p_method not in ('cash','money_order','cashiers_check','branch_deposit') then
+    raise exception 'method must be cash, money_order, cashiers_check, or branch_deposit';
   end if;
 
   select * into acct from deposit_accounts where account_number = p_account_number and active;
@@ -123,24 +129,23 @@ begin
   end if;
 
   if lease is null then
-    select count(*), min(l.id::text)::uuid into lease_count, lease
-    from leases l join lease_people lp on lp.lease_id = l.id
-    where lp.person_id = acct.person_id and l.status = 'active';
-    if lease_count = 0 then raise exception 'tenant has no active lease'; end if;
-    if lease_count > 1 then raise exception 'tenant has % active leases; pass a lease id', lease_count; end if;
-  elsif not exists (select 1 from lease_people where lease_id = lease and person_id = acct.person_id) then
-    raise exception 'lease % does not belong to this deposit account''s tenant', lease;
+    select count(*), min(id::text)::uuid into lease_count, lease
+    from leases where unit_id = acct.unit_id and status = 'active';
+    if lease_count = 0 then raise exception 'unit for deposit number % has no active lease', p_account_number; end if;
+    if lease_count > 1 then raise exception 'unit has % active leases; pass a lease id', lease_count; end if;
+  elsif not exists (select 1 from leases where id = lease and unit_id = acct.unit_id) then
+    raise exception 'lease % is not on the unit for deposit number %', lease, p_account_number;
   end if;
 
-  insert into payments (lease_id, person_id, method, amount, deposit_account_id, deposit_reference,
+  insert into payments (lease_id, method, amount, deposit_account_id, deposit_reference,
                         deposit_location, received_date)
-  values (lease, acct.person_id, p_method, p_amount, acct.id, p_reference, p_location, p_received_date)
+  values (lease, p_method, p_amount, acct.id, p_reference, p_location, p_received_date)
   returning id into payment_id;
 
   perform post_payment(
     payment_id,
     p_received_date,
-    concat_ws(' ', initcap(replace(p_method, '_', ' ')), 'deposit',
+    concat_ws(' ', case p_method when 'branch_deposit' then 'Bank' else initcap(replace(p_method, '_', ' ')) end, 'deposit',
               case when p_location is not null then 'at ' || p_location end,
               case when p_reference is not null then '#' || p_reference end)
   );
