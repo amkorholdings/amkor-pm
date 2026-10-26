@@ -9,7 +9,7 @@ web app on Next.js, Supabase (Postgres + auth + storage), and Vercel.
 2. **Tenant ledger** — append-only charges, payments, credits, and adjustments per lease.
 3. **Buildium migration** — import from Buildium CSV exports (see `docs/migration.md`).
 4. **Tenant portal** — ledger view, payment details, profile.
-5. **Payments** — receive rent; bank/card processor to be chosen.
+5. **Payments** — Stripe for card and ACH; in-person deposits by tenant deposit number at Truliant or CO-OP Shared Branch. (`supabase/migrations/0003_payments.sql`)
 6. **Listings** — syndicate to Zillow, Rent.com, Zumper, Facebook, and other free sites.
 
 ## Local setup

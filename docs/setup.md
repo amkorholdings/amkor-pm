@@ -15,6 +15,7 @@ Things only the account owner can do. Steps in order.
 3. Apply the migrations in order in the SQL editor:
    - `supabase/migrations/0001_core_schema.sql`
    - `supabase/migrations/0002_staff_and_policies.sql`
+   - `supabase/migrations/0003_payments.sql`
 4. Create the first staff user: sign in once through the app (magic link), then in the SQL editor run:
    ```sql
    insert into staff (auth_user_id, name)
@@ -33,7 +34,17 @@ Things only the account owner can do. Steps in order.
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `AGENT_API_TOKEN` (a long random string; store it in your password manager)
    - `NEXT_PUBLIC_SITE_URL` (the production URL)
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_WEBHOOK_SECRET`
 3. Deploy.
+
+## 3a. Stripe
+
+1. In Stripe → Settings → Payment methods, turn on Cards and ACH Direct Debit (US bank account).
+2. Developers → Webhooks → add an endpoint at `<site-url>/api/stripe/webhook` with these events:
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.dispute.created`.
+3. Copy the secret key and the webhook signing secret into Vercel (above).
 
 ## 4. Local run (optional)
 
@@ -50,8 +61,9 @@ export so the header map can be matched to Buildium's columns.
 
 ## Still to decide
 
-- **Payments:** Which processor will take rent payments (ACH and card), and under which merchant account?
-  The ledger already records payments. The processor integration needs that decision first.
+- **Bank feed for deposits:** in-person deposits are recorded by hand under Payments, or by an agent through
+  `POST /api/v1/deposits`. Decide how Truliant deposit activity reaches the app (statement export, alerts, or
+  an aggregator) to automate it.
 - **Listing syndication:** Zillow, Rent.com, Zumper, and Facebook don't offer one free API for every
   site. Choose a syndication provider or plan to hit all of them. This is not built.
 - **Owner-side statements and tenant notices:** not built.

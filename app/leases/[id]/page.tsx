@@ -9,7 +9,7 @@ export default async function LeasePage({ params }: { params: { id: string } }) 
   const { data: lease } = await supabase
     .from('leases')
     .select(
-      'id, start_date, end_date, monthly_rent, security_deposit, status, units(unit_number, properties(name)), lease_people(role, people(first_name, last_name))',
+      'id, start_date, end_date, monthly_rent, security_deposit, status, units(unit_number, properties(name)), lease_people(role, people(id, first_name, last_name, deposit_accounts(account_number, institution)))',
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -24,12 +24,14 @@ export default async function LeasePage({ params }: { params: { id: string } }) 
 
   const balance = (entries ?? []).reduce((sum, e) => sum + Number(e.amount), 0);
   const unit = lease.units as unknown as { unit_number: string; properties: { name: string } };
-  const tenants = (lease.lease_people ?? []).map(
-    (lp) => {
-      const p = lp.people as unknown as { first_name: string; last_name: string };
-      return `${p.first_name} ${p.last_name}`;
-    },
-  );
+  type Person = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    deposit_accounts: { account_number: string; institution: string } | null;
+  };
+  const people = (lease.lease_people ?? []).map((lp) => lp.people as unknown as Person);
+  const tenants = people.map((p) => `${p.first_name} ${p.last_name}`);
 
   async function addEntry(formData: FormData) {
     'use server';
@@ -41,6 +43,25 @@ export default async function LeasePage({ params }: { params: { id: string } }) 
       description: String(formData.get('description') ?? '') || null,
       amount: Number(formData.get('amount')),
     });
+    revalidatePath(`/leases/${params.id}`);
+  }
+
+  // The deposit number is the account number of the bank account tied to the tenant's profile.
+  async function setDepositNumber(formData: FormData) {
+    'use server';
+    const { supabase } = await requireStaff();
+    const accountNumber = String(formData.get('account_number') ?? '').trim();
+    if (!accountNumber) return;
+    const { error } = await supabase.from('deposit_accounts').upsert(
+      {
+        person_id: String(formData.get('person_id')),
+        account_number: accountNumber,
+        institution: String(formData.get('institution') ?? '').trim() || 'Truliant Federal Credit Union',
+        active: true,
+      },
+      { onConflict: 'person_id' },
+    );
+    if (error) throw new Error(error.message);
     revalidatePath(`/leases/${params.id}`);
   }
 
@@ -72,6 +93,23 @@ export default async function LeasePage({ params }: { params: { id: string } }) 
           ))}
         </tbody>
       </table>
+
+      <h2>Deposit numbers</h2>
+      <p style={{ fontSize: '0.9em' }}>
+        Tenants deposit cash, money orders, and cashier's checks at Truliant or any CO-OP Shared Branch credit
+        union using this account number. Record those deposits under Payments.
+      </p>
+      {people.map((p) => (
+        <form key={p.id} action={setDepositNumber} style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
+          <input type="hidden" name="person_id" value={p.id} />
+          <span style={{ minWidth: 160, alignSelf: 'center' }}>
+            {p.first_name} {p.last_name}
+          </span>
+          <input name="account_number" placeholder="Account number" defaultValue={p.deposit_accounts?.account_number ?? ''} />
+          <input name="institution" placeholder="Truliant Federal Credit Union" defaultValue={p.deposit_accounts?.institution ?? ''} />
+          <button type="submit">Save</button>
+        </form>
+      ))}
 
       <h2>Add ledger entry</h2>
       <p style={{ fontSize: '0.9em' }}>
