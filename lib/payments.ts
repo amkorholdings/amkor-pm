@@ -36,6 +36,16 @@ export async function recordDeposit(supabase: SupabaseClient, d: NewDeposit) {
   if (!Number.isFinite(d.amount) || d.amount <= 0) throw new Error('Amount must be a positive number');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.received_date)) throw new Error('Date must be YYYY-MM-DD');
 
+  // Accounts on the bank feed post their deposits automatically; entering one here too would count it twice.
+  const { data: account } = await supabase
+    .from('deposit_accounts')
+    .select('plaid_account_id')
+    .eq('account_number', d.account_number.trim())
+    .maybeSingle();
+  if (account?.plaid_account_id) {
+    throw new Error('This deposit number is on the bank feed. Its deposits post automatically each morning.');
+  }
+
   const { data, error } = await supabase.rpc('record_deposit', {
     p_account_number: d.account_number.trim(),
     p_amount: d.amount,

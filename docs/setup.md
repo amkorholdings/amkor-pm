@@ -87,8 +87,12 @@ export so the header map can be matched to Buildium's columns.
 
 ## Still to decide
 
-- **Returned deposits:** a bounced check or money order shows up in the bank feed as money out. The feed
-  only posts money in, so record those returns by hand for now.
+- **Returned item fees:** when a check or money order bounces, the feed takes the payment back off the lease and
+  records the bank's returned item fee. It does not charge the tenant a returned check fee. Decide whether to,
+  and how much (North Carolina caps it at $25).
+- **Bank wording:** bounced items are recognized by the bank's description (for example "Returned item" or
+  "NSF"). Check the first few bounced items Truliant reports to confirm they are labeled "Bounced item" on the
+  Bank feed page.
 - **Listing syndication:** Zillow, Rent.com, Zumper, and Facebook don't offer one free API for every
   site. Choose a syndication provider or plan to hit all of them. This is not built.
 - **Owner-side statements and tenant notices:** not built.

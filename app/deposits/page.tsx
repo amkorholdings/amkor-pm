@@ -41,7 +41,8 @@ export default async function DepositsPage({ searchParams }: { searchParams: { e
     <Shell title="Payments">
       <h2>Record an in-person deposit</h2>
       <p className="muted">
-        For cash, money orders, and cashier's checks deposited at Truliant or a CO-OP Shared Branch credit union.
+        Only for units whose bank account isn't on the bank feed yet. Deposits into accounts on the feed post on
+        their own each morning.
         The deposit number is the unit's bank account number. The payment posts to the unit's active lease. Deposits
         the 5am bank feed picks up are posted automatically and don't need to be entered here.
       </p>

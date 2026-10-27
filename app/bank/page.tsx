@@ -1,12 +1,28 @@
 import { revalidatePath } from 'next/cache';
 import { requireStaff } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { syncAllBanks } from '@/lib/bank-sync';
+import { retryProblems, syncAllBanks } from '@/lib/bank-sync';
 import { PlaidConnect } from '@/components/PlaidConnect';
 import { Shell } from '@/components/Shell';
 
-// Bank feed: connected banks, which bank account belongs to which unit, and deposits that need a look.
-export default async function BankPage() {
+const KIND_LABELS: Record<string, string> = {
+  deposit: 'Deposit',
+  return: 'Bounced item',
+  fee: 'Bank fee',
+  transfer: 'Transfer',
+  other: 'Other',
+};
+const STATUS_LABELS: Record<string, string> = {
+  posted: 'Posted to lease',
+  returned: 'Taken back off lease',
+  recorded: 'Recorded',
+  ignored: 'Before bank was connected',
+  unmatched: 'Needs a look',
+  error: 'Needs a look',
+};
+
+// Bank feed: connected banks, which bank account belongs to which unit, and every debit and credit.
+export default async function BankPage({ searchParams }: { searchParams: { account?: string } }) {
   const { supabase } = await requireStaff();
   // plaid_items holds access tokens, so it's read with the service role and only safe columns are selected.
   const { data: items } = await createAdminClient()
@@ -26,6 +42,14 @@ export default async function BankPage() {
     .order('posted_date', { ascending: false })
     .limit(100);
 
+  let txQuery = supabase
+    .from('bank_transactions')
+    .select('id, posted_date, amount, description, kind, status, plaid_account_id')
+    .order('posted_date', { ascending: false })
+    .limit(300);
+  if (searchParams.account) txQuery = txQuery.eq('plaid_account_id', searchParams.account);
+  const { data: transactions } = await txQuery;
+
   const unitLabel = (d: { units: unknown }) => {
     const u = d.units as { unit_number: string; properties: { name: string } } | null;
     return u ? `${u.properties.name} · Unit ${u.unit_number}` : '';
@@ -37,6 +61,13 @@ export default async function BankPage() {
     'use server';
     await requireStaff();
     await syncAllBanks(createAdminClient());
+    revalidatePath('/bank');
+  }
+
+  async function retryNow() {
+    'use server';
+    await requireStaff();
+    await retryProblems(createAdminClient());
     revalidatePath('/bank');
   }
 
@@ -59,8 +90,9 @@ export default async function BankPage() {
   return (
     <Shell title="Bank feed">
       <p className="muted">
-        Every morning at 5am, deposits into the unit bank accounts are pulled through Plaid and posted to each
-        unit's active lease. Deposits from before a bank was connected are skipped.
+        Every morning at 5am, every transaction on the connected accounts is pulled through Plaid. Deposits post to
+        the unit's active lease. A bounced check or money order is taken back off the lease it was credited to. Fees
+        and transfers are recorded. Transactions from before a bank was connected are recorded but not posted.
       </p>
 
       <h2>Connected banks</h2>
@@ -124,11 +156,14 @@ export default async function BankPage() {
         </tbody>
       </table>
 
-      <h2>Deposits that need a look</h2>
+      <h2>Needs a look</h2>
       <p className="muted">
-        Unmatched: the bank account isn't linked to a unit. Error: the unit has no single active lease. Record these by
-        hand under Payments.
+        Transactions the app couldn't place. Fix the reason shown (for example, link the bank account to its unit or
+        add the unit's lease) and they post on their own at the next sync, or press Retry.
       </p>
+      <form action={retryNow} style={{ marginBottom: '0.75rem' }}>
+        <button type="submit">Retry</button>
+      </form>
       <table cellPadding={8} style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead>
           <tr style={{ textAlign: 'left' }}>
@@ -145,10 +180,53 @@ export default async function BankPage() {
               <td>{t.posted_date}</td>
               <td>{accountName.get(t.plaid_account_id) ?? t.plaid_account_id}</td>
               <td>{t.description}</td>
-              <td>{t.status === 'unmatched' ? 'No unit linked' : t.error}</td>
+              <td>{t.error}</td>
               <td style={{ textAlign: 'right' }}>{Number(t.amount).toFixed(2)}</td>
             </tr>
           ))}
+        </tbody>
+      </table>
+
+      <h2>All transactions</h2>
+      <form method="get" style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <select name="account" defaultValue={searchParams.account ?? ''}>
+          <option value="">All accounts</option>
+          {(accounts ?? []).map((a) => (
+            <option key={a.account_id} value={a.account_id}>
+              {accountName.get(a.account_id)}
+              {byPlaid.get(a.account_id) ? ` · ${unitLabel(byPlaid.get(a.account_id)!)}` : ''}
+            </option>
+          ))}
+        </select>
+        <button type="submit">Show</button>
+      </form>
+      <table cellPadding={8} style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr style={{ textAlign: 'left' }}>
+            <th>Date</th>
+            <th>Account</th>
+            <th>Description</th>
+            <th>Type</th>
+            <th>What happened</th>
+            <th style={{ textAlign: 'right' }}>Money in</th>
+            <th style={{ textAlign: 'right' }}>Money out</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(transactions ?? []).map((t) => {
+            const amount = Number(t.amount);
+            return (
+              <tr key={t.id}>
+                <td>{t.posted_date}</td>
+                <td>{accountName.get(t.plaid_account_id) ?? t.plaid_account_id}</td>
+                <td>{t.description}</td>
+                <td>{KIND_LABELS[t.kind] ?? t.kind}</td>
+                <td>{STATUS_LABELS[t.status] ?? t.status}</td>
+                <td style={{ textAlign: 'right' }}>{amount > 0 ? amount.toFixed(2) : ''}</td>
+                <td style={{ textAlign: 'right' }}>{amount < 0 ? (-amount).toFixed(2) : ''}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </Shell>
