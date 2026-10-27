@@ -91,7 +91,7 @@ export default async function BankPage({ searchParams }: { searchParams: { accou
     <Shell title="Bank feed">
       <p className="muted">
         Every morning at 5am, every transaction on the connected accounts is pulled through Plaid. Deposits post to
-        the unit's active lease. A bounced check or money order is taken back off the lease it was credited to. Fees
+        the unit's active lease. A bounced check or money order is taken back off the lease it was credited to, with a $25 returned check fee. Fees
         and transfers are recorded. Transactions from before a bank was connected are recorded but not posted.
       </p>
 

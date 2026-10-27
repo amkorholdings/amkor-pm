@@ -87,9 +87,6 @@ export so the header map can be matched to Buildium's columns.
 
 ## Still to decide
 
-- **Returned item fees:** when a check or money order bounces, the feed takes the payment back off the lease and
-  records the bank's returned item fee. It does not charge the tenant a returned check fee. Decide whether to,
-  and how much (North Carolina caps it at $25).
 - **Bank wording:** bounced items are recognized by the bank's description (for example "Returned item" or
   "NSF"). Check the first few bounced items Truliant reports to confirm they are labeled "Bounced item" on the
   Bank feed page.

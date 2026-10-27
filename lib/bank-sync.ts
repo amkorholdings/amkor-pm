@@ -129,6 +129,8 @@ const FEE = /\bfee\b|service charge/i;
 const RETURN = /return|chargeback|\bnsf\b|insufficient|uncollected|\bunpaid\b|reversal|ret(urned)? (item|dep|chk)/i;
 const TRANSFER = /transfer|xfer|sweep|to share|to checking|from share|from checking/i;
 
+const RETURNED_CHECK_FEE = 25;
+
 type Kind = 'deposit' | 'return' | 'fee' | 'transfer' | 'other';
 
 // Unit accounts exist to take rent, so any money in is a deposit (a tenant's online transfer included),
@@ -219,7 +221,7 @@ async function recordTransaction(admin: SupabaseClient, t: PlaidTransaction, bef
   const earliest = new Date(new Date(t.date).getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
   const { data: bounced } = await admin
     .from('payments')
-    .select('id')
+    .select('id, lease_id')
     .eq('deposit_account_id', account.id)
     .eq('status', 'succeeded')
     .eq('amount', -amountIn)
@@ -241,6 +243,14 @@ async function recordTransaction(admin: SupabaseClient, t: PlaidTransaction, bef
     await save('error', { error: error.message });
     return 'problems';
   }
+  // Returned check fee charged to the tenant (North Carolina allows up to $25).
+  await admin.from('ledger_entries').insert({
+    lease_id: bounced.lease_id,
+    entry_date: t.date,
+    entry_type: 'charge',
+    description: 'Returned check fee',
+    amount: RETURNED_CHECK_FEE,
+  });
   await save('returned', { payment_id: bounced.id });
   return 'returned';
 }
