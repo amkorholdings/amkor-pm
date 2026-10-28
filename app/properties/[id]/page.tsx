@@ -15,7 +15,7 @@ export default async function PropertyPage({ params }: { params: { id: string } 
 
   const { data: units } = await supabase
     .from('units')
-    .select('id, unit_number, bedrooms, bathrooms, market_rent, leases(id, status)')
+    .select('id, unit_number, bedrooms, bathrooms, market_rent, leases(id, status), deposit_accounts(account_number, institution)')
     .eq('property_id', property.id)
     .order('unit_number');
 
@@ -37,6 +37,25 @@ export default async function PropertyPage({ params }: { params: { id: string } 
     revalidatePath(`/properties/${params.id}`);
   }
 
+  // Each unit has its own bank account. Its account number is the deposit number the unit's tenant uses.
+  async function setDepositNumber(formData: FormData) {
+    'use server';
+    const { supabase } = await requireStaff();
+    const accountNumber = String(formData.get('account_number') ?? '').trim();
+    if (!accountNumber) return;
+    const { error } = await supabase.from('deposit_accounts').upsert(
+      {
+        unit_id: String(formData.get('unit_id')),
+        account_number: accountNumber,
+        institution: String(formData.get('institution') ?? '').trim() || 'Truliant Federal Credit Union',
+        active: true,
+      },
+      { onConflict: 'unit_id' },
+    );
+    if (error) throw new Error(error.message);
+    revalidatePath(`/properties/${params.id}`);
+  }
+
   return (
     <Shell title={property.name}>
       <p>
@@ -51,11 +70,13 @@ export default async function PropertyPage({ params }: { params: { id: string } 
             <th>Bed / Bath</th>
             <th>Market rent</th>
             <th>Lease</th>
+            <th>Deposit number</th>
           </tr>
         </thead>
         <tbody>
           {(units ?? []).map((u) => {
             const active = (u.leases ?? []).find((l) => l.status === 'active');
+            const deposit = u.deposit_accounts as unknown as { account_number: string; institution: string } | null;
             return (
               <tr key={u.id} style={{ borderTop: '1px solid #eee' }}>
                 <td>{u.unit_number}</td>
@@ -64,6 +85,14 @@ export default async function PropertyPage({ params }: { params: { id: string } 
                 </td>
                 <td>{u.market_rent ? `$${u.market_rent}` : '–'}</td>
                 <td>{active ? <Link href={`/leases/${active.id}`}>View lease</Link> : 'Vacant'}</td>
+                <td>
+                  <form action={setDepositNumber} style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="hidden" name="unit_id" value={u.id} />
+                    <input name="account_number" placeholder="Account number" defaultValue={deposit?.account_number ?? ''} />
+                    <input name="institution" placeholder="Truliant Federal Credit Union" defaultValue={deposit?.institution ?? ''} />
+                    <button type="submit">Save</button>
+                  </form>
+                </td>
               </tr>
             );
           })}
