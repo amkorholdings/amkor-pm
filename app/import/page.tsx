@@ -36,8 +36,8 @@ export default async function ImportPage({
         </div>
       )}
       <p>
-        Import in this order: properties, units, people, leases, then ledger. Each file needs the
-        headers described in <code>docs/migration.md</code>.
+        Import the Buildium CSV exports as downloaded, in this order: properties, units, leases,
+        tenants. See <code>docs/migration.md</code>.
       </p>
       <form action={importCsv} style={{ display: 'grid', gap: '0.75rem', maxWidth: 420 }}>
         <select name="type" defaultValue="properties">

@@ -1,30 +1,29 @@
 # Buildium CSV migration
 
-Import in this order, from the Import page (`/import`): properties → units → people → leases → ledger.
-Every row needs a `buildium_id`, so re-running an import is safe. Ledger rows are never updated.
-Existing rows are skipped.
+The importer reads Buildium's exports as downloaded. Do not rename columns.
+Import in this order from the Import page (`/import`):
 
-## Expected headers (our canonical names)
+1. **properties**: Buildium "Properties" export (Id, Property name, Address 1, City/Locality, State/Province, Postal code).
+2. **units**: Buildium "Rental units" export. The combined file or the per-property files both work (Id, Property name, Unit, Bedrooms, Bathrooms, Market rent).
+3. **leases**: Buildium "Rent roll" export, all statuses (Account number, Unit, Status, Start date, End date, Rent).
+4. **tenants**: Buildium "Tenants" export, all statuses (Id, LeaseId, First name, Last name, emails, phones). Creates people and links them to their leases.
 
-| File | Required headers | Optional headers |
-|---|---|---|
-| properties | buildium_id, name, address_line1, city, state, postal_code | address_line2 |
-| units | buildium_id, property_buildium_id, unit_number | bedrooms, bathrooms, market_rent |
-| people | buildium_id, first_name, last_name | email, phone |
-| leases | buildium_id, unit_buildium_id, start_date, monthly_rent | end_date, security_deposit, status, person_buildium_ids |
-| ledger | buildium_id, lease_buildium_id, entry_date, entry_type, amount | description |
+Re-running an import is safe. Each row is upserted on its Buildium ID.
 
-- `person_buildium_ids` is a semicolon-separated list, for example `1001;1002`.
-- `entry_type` must be one of: charge, payment, credit, adjustment, deposit, refund.
-- Ledger amounts are signed: positive means the tenant owes, negative means paid or credited.
-- Dates may be `YYYY-MM-DD` or `MM/DD/YYYY`.
+## Status mapping (leases)
 
-## Open item
+| Buildium Status | Our lease status |
+|---|---|
+| Active | active |
+| Future | pending |
+| Past | ended |
 
-Buildium's real export headers are not yet mapped. Send one sample export per type, and we'll add a
-header map so the files import without edits.
+## Known gaps
+
+- **Ledger is not imported yet.** The Buildium "Transaction detail by account" export carries a `leaseId` on each line, so it can be linked. Before importing it, we need to decide which lines make up each tenant's balance, because the export is double-entry (each journal has two lines). Check the result against Buildium's lease balances.
+- **Security deposits** are not in the rent roll export and are set to 0 for now.
+- Lease-to-unit matching splits the rent roll's Unit column on the first " - ". Property names must not contain " - ".
 
 ## Checks after each import
 
-Compare each lease's balance (`lease_balances` view, or the lease page) with the Buildium lease balance.
-Any difference means a row was skipped or mis-linked. Import errors are listed on the Import page.
+Compare the number of units, leases and people with the Buildium exports. Import errors are listed on the Import page (first 10 are shown).
